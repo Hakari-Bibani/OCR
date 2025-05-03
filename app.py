@@ -3,6 +3,7 @@ from PIL import Image
 import easyocr
 import tempfile
 import fitz  # PyMuPDF
+import numpy as np
 
 st.set_page_config(page_title="Kurdish OCR App", layout="wide")
 st.title("📄 Kurdish (Sorani) OCR")
@@ -10,9 +11,11 @@ st.markdown("Upload an image or PDF to extract text in Central Kurdish (Sorani).
 
 uploaded_file = st.file_uploader("Upload Image or PDF", type=["png", "jpg", "jpeg", "pdf"])
 
+reader = easyocr.Reader(['ku', 'en'], gpu=False)  # Load once
+
 def extract_text_from_image(image):
-    reader = easyocr.Reader(['ku', 'en'])  # Kurdish + English
-    result = reader.readtext(image)
+    image_np = np.array(image)
+    result = reader.readtext(image_np)
     text = "\n".join([item[1] for item in result])
     return text
 
