@@ -1,1 +1,4 @@
-requirements.txt
+streamlit
+easyocr
+pdf2image
+Pillow
