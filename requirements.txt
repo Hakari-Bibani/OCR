@@ -1,4 +1,5 @@
 streamlit
-easyocr
-pdf2image
 Pillow
+easyocr
+torch
+PyMuPDF
