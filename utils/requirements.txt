@@ -1,4 +1,4 @@
 streamlit
-pytesseract
+easyocr
 pdf2image
 Pillow
