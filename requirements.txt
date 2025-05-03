@@ -3,3 +3,4 @@ Pillow
 easyocr
 torch
 PyMuPDF
+numpy
