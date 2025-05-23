@@ -1,4 +1,5 @@
 streamlit
-pillow
-pdf2image
-google-genai-sdk  # placeholder for actual Python SDK
+requests
+Pillow
+PyMuPDF
+python-dotenv
