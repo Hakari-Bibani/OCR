@@ -4,7 +4,6 @@ from typing import List
 
 from flask import Flask, flash, redirect, render_template, request, send_from_directory, url_for
 from google.api_core.client_options import ClientOptions
-from google.auth.exceptions import DefaultCredentialsError
 from google.cloud import vision
 from werkzeug.utils import secure_filename
 
@@ -71,18 +70,8 @@ def _allowed_file(filename: str) -> bool:
 
 def _vision_client() -> vision.ImageAnnotatorClient:
     api_key = os.environ.get("GOOGLE_VISION_API_KEY")
-    if api_key:
-        client_options = ClientOptions(api_key=api_key)
-        return vision.ImageAnnotatorClient(client_options=client_options)
-
-    try:
-        return vision.ImageAnnotatorClient()
-    except DefaultCredentialsError as exc:  # pragma: no cover - surfaces to UI
-        raise RuntimeError(
-            "Google Cloud credentials were not found. Set the GOOGLE_VISION_API_KEY "
-            "environment variable with an API key, or configure Application Default "
-            "Credentials (GOOGLE_APPLICATION_CREDENTIALS)."
-        ) from exc
+    client_options = ClientOptions(api_key=api_key) if api_key else None
+    return vision.ImageAnnotatorClient(client_options=client_options)
 
 
 def _process_document(path: Path) -> List[str]:

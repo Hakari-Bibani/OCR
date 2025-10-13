@@ -26,22 +26,13 @@ pip install -r requirements.txt
 Set the following environment variables before running the application:
 
 - `FLASK_SECRET_KEY` &mdash; secret key used by Flask for session management.
-- **Either** `GOOGLE_VISION_API_KEY` &mdash; a Vision API key for authenticating REST requests, **or**
-  `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service-account JSON file that has access to the
-  Vision API.
+- `GOOGLE_VISION_API_KEY` &mdash; your Google Cloud Vision API key.
 
 You can export them in your shell session:
 
 ```bash
 export FLASK_SECRET_KEY="change-me"
 export GOOGLE_VISION_API_KEY="your_api_key_here"
-```
-
-If you prefer using a service account instead of an API key, download the JSON key from the Google
-Cloud console and point `GOOGLE_APPLICATION_CREDENTIALS` to it:
-
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/to/service-account.json"
 ```
 
 ## Running the application
