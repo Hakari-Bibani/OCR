@@ -16,9 +16,11 @@ from google.oauth2 import service_account
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "tiff", "pdf"}
 
+DEFAULT_GOOGLE_VISION_API_KEY = "AIzaSyBfVegccgGGEetfHMcpm4t5j_3b7OQclSQ"
+
 
 def _vision_client() -> vision.ImageAnnotatorClient:
-    api_key = os.environ.get("GOOGLE_VISION_API_KEY")
+    api_key = os.environ.get("GOOGLE_VISION_API_KEY") or DEFAULT_GOOGLE_VISION_API_KEY
     client_options = ClientOptions(api_key=api_key) if api_key else None
 
     credentials_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")

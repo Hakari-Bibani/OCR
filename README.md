@@ -22,7 +22,8 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Set the following environment variable before running the application:
+The application is preconfigured with a default Google Cloud Vision API key so that it works out of the box. If you would like
+to use a different key, set the following environment variable before running the application:
 
 - `GOOGLE_VISION_API_KEY` &mdash; your Google Cloud Vision API key.
 
