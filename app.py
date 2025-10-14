@@ -1,71 +1,17 @@
+"""Streamlit app for extracting Kurdish text using Google Cloud Vision."""
+
+from __future__ import annotations
+
 import os
+import tempfile
 from pathlib import Path
 from typing import List
 
-from flask import Flask, flash, redirect, render_template, request, send_from_directory, url_for
+import streamlit as st
 from google.api_core.client_options import ClientOptions
 from google.cloud import vision
-from werkzeug.utils import secure_filename
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "tiff", "pdf"}
-UPLOAD_FOLDER = Path("uploads")
-
-
-def create_app() -> Flask:
-    """Application factory for the OCR Flask app."""
-    app = Flask(__name__)
-    app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
-    app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-    UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
-
-    @app.route("/")
-    def index():
-        return render_template("index.html")
-
-    @app.post("/extract")
-    def extract_text():
-        if "document" not in request.files:
-            flash("No file part in the request.")
-            return redirect(url_for("index"))
-
-        file = request.files["document"]
-        if file.filename == "":
-            flash("No file selected.")
-            return redirect(url_for("index"))
-
-        if not _allowed_file(file.filename):
-            flash("Unsupported file type. Please upload an image or PDF.")
-            return redirect(url_for("index"))
-
-        filename = secure_filename(file.filename)
-        saved_path = UPLOAD_FOLDER / filename
-        file.save(saved_path)
-
-        try:
-            text_blocks = _process_document(saved_path)
-        except Exception as exc:  # pragma: no cover - surface as flash message
-            flash(f"Failed to process the document: {exc}")
-            return redirect(url_for("index"))
-
-        if not text_blocks:
-            flash("No text detected in the document.")
-            return redirect(url_for("index"))
-
-        return render_template(
-            "result.html",
-            filename=filename,
-            text_blocks=text_blocks,
-        )
-
-    @app.get("/uploads/<path:filename>")
-    def uploaded_file(filename: str):
-        return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
-
-    return app
-
-
-def _allowed_file(filename: str) -> bool:
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def _vision_client() -> vision.ImageAnnotatorClient:
@@ -126,6 +72,75 @@ def _extract_pdf_text(client: vision.ImageAnnotatorClient, path: Path) -> List[s
     return blocks
 
 
+def _save_to_temp_file(data: bytes, filename: str | None) -> Path:
+    suffix = Path(filename).suffix if filename else ""
+    suffix = suffix if suffix else ".tmp"
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        tmp_file.write(data)
+        tmp_file.flush()
+    finally:
+        tmp_file.close()
+    return Path(tmp_file.name)
+
+
+def main() -> None:
+    st.set_page_config(page_title="Kurdish OCR", page_icon="📝", layout="centered")
+    st.title("Kurdish OCR")
+    st.write(
+        "Upload a Kurdish document as an image or PDF and extract the detected text using "
+        "Google Cloud Vision."
+    )
+
+    with st.form("ocr_form"):
+        uploaded_file = st.file_uploader(
+            "Upload Kurdish image or PDF",
+            type=sorted(ALLOWED_EXTENSIONS),
+        )
+        submitted = st.form_submit_button("Extract text")
+
+    if not submitted:
+        return
+
+    if not uploaded_file:
+        st.warning("Please upload a file before submitting the form.")
+        return
+
+    file_data = uploaded_file.getvalue()
+    if not file_data:
+        st.warning("The uploaded file is empty. Please try again with a different file.")
+        return
+
+    tmp_path = _save_to_temp_file(file_data, uploaded_file.name)
+    try:
+        try:
+            text_blocks = _process_document(tmp_path)
+        except Exception as exc:  # pragma: no cover - surfaced to the UI
+            st.error(f"Failed to process the document: {exc}")
+            return
+
+        if not text_blocks:
+            st.info("No text detected in the document.")
+            return
+
+        st.success("Text extracted successfully.")
+        for index, block in enumerate(text_blocks, start=1):
+            st.text_area(
+                label=f"Extracted text block {index}",
+                value=block,
+                height=200,
+                key=f"text_block_{index}",
+            )
+
+        st.download_button(
+            label="Download original file",
+            data=file_data,
+            file_name=uploaded_file.name or f"document{tmp_path.suffix}",
+            mime=uploaded_file.type or "application/octet-stream",
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
-    application = create_app()
-    application.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    main()
