@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -9,7 +10,9 @@ from typing import List
 
 import streamlit as st
 from google.api_core.client_options import ClientOptions
+from google.auth.exceptions import GoogleAuthError
 from google.cloud import vision
+from google.oauth2 import service_account
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "tiff", "pdf"}
 
@@ -17,7 +20,28 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "tiff", "pdf"}
 def _vision_client() -> vision.ImageAnnotatorClient:
     api_key = os.environ.get("GOOGLE_VISION_API_KEY")
     client_options = ClientOptions(api_key=api_key) if api_key else None
-    return vision.ImageAnnotatorClient(client_options=client_options)
+
+    credentials_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    credentials = None
+
+    if credentials_json:
+        try:
+            credentials_info = json.loads(credentials_json)
+            credentials = service_account.Credentials.from_service_account_info(credentials_info)
+        except (ValueError, GoogleAuthError) as exc:
+            raise RuntimeError(
+                "Invalid Google Cloud service account credentials provided via "
+                "GOOGLE_APPLICATION_CREDENTIALS_JSON."
+            ) from exc
+
+    try:
+        return vision.ImageAnnotatorClient(client_options=client_options, credentials=credentials)
+    except GoogleAuthError as exc:  # pragma: no cover - surface to UI
+        raise RuntimeError(
+            "Google Cloud Vision credentials could not be determined. "
+            "Provide a valid service account JSON via GOOGLE_APPLICATION_CREDENTIALS_JSON "
+            "or configure default credentials."
+        ) from exc
 
 
 def _process_document(path: Path) -> List[str]:
@@ -34,7 +58,13 @@ def _extract_image_text(client: vision.ImageAnnotatorClient, path: Path) -> List
         content = image_file.read()
 
     image = vision.Image(content=content)
-    response = client.text_detection(image=image)
+    try:
+        response = client.text_detection(image=image)
+    except GoogleAuthError as exc:  # pragma: no cover - surface to UI
+        raise RuntimeError(
+            "Failed to authenticate with Google Cloud Vision. "
+            "Check your credentials configuration."
+        ) from exc
 
     if response.error.message:
         raise RuntimeError(response.error.message)
@@ -58,7 +88,13 @@ def _extract_pdf_text(client: vision.ImageAnnotatorClient, path: Path) -> List[s
             page = document.load_page(page_number)
             pix = page.get_pixmap(dpi=300)
             image = vision.Image(content=pix.tobytes())
-            response = client.text_detection(image=image)
+            try:
+                response = client.text_detection(image=image)
+            except GoogleAuthError as exc:  # pragma: no cover - surface to UI
+                raise RuntimeError(
+                    "Failed to authenticate with Google Cloud Vision. "
+                    "Check your credentials configuration."
+                ) from exc
 
             if response.error.message:
                 raise RuntimeError(response.error.message)
