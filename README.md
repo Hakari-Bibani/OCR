@@ -1,13 +1,12 @@
-# Kurdish OCR Flask App
+# Kurdish OCR Streamlit App
 
-A simple Flask web application that extracts Kurdish text from uploaded images or PDF files using the Google Cloud Vision API.
+A lightweight [Streamlit](https://streamlit.io/) interface for extracting Kurdish text from images or PDF documents with the help of the Google Cloud Vision API.
 
 ## Features
 
-- Upload Kurdish documents as images or PDFs.
-- Uses Google Cloud Vision OCR for accurate text extraction.
+- Upload Kurdish documents as images or PDFs (PNG, JPG, JPEG, GIF, BMP, TIFF, PDF).
 - Converts PDF pages to images using [PyMuPDF](https://pymupdf.readthedocs.io/).
-- Displays detected text on the results page.
+- Displays the detected text directly in the browser and allows downloading the original file.
 
 ## Prerequisites
 
@@ -23,28 +22,26 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Set the following environment variables before running the application:
+Set the following environment variable before running the application:
 
-- `FLASK_SECRET_KEY` &mdash; secret key used by Flask for session management.
 - `GOOGLE_VISION_API_KEY` &mdash; your Google Cloud Vision API key.
 
-You can export them in your shell session:
+You can export it in your shell session:
 
 ```bash
-export FLASK_SECRET_KEY="change-me"
 export GOOGLE_VISION_API_KEY="your_api_key_here"
 ```
 
 ## Running the application
 
 ```bash
-python app.py
+streamlit run app.py
 ```
 
-The app will start on `http://localhost:5000/`. Navigate there and upload a Kurdish PDF or image to extract text.
+Streamlit will print a local URL (e.g., `http://localhost:8501/`). Open it in a browser, upload a Kurdish PDF or image, and click **Extract text** to see the detected text blocks.
 
 ## Notes
 
 - Google Cloud Vision OCR works well with Kurdish text without additional configuration.
-- Uploaded files are saved to the `uploads/` directory. Make sure this directory is writable in your environment.
-- For production deployments you should integrate proper authentication, HTTPS, and persistent storage.
+- Uploaded files are processed in-memory and stored temporarily only for OCR extraction.
+- For production deployments you should configure secure storage of secrets and evaluate Google Cloud costs.
