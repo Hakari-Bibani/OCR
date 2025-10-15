@@ -47,6 +47,12 @@ def _vision_client() -> vision.ImageAnnotatorClient:
                 "Invalid Google Cloud service account credentials provided via "
                 "GOOGLE_APPLICATION_CREDENTIALS_JSON."
             ) from exc
+    elif not api_key and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        raise RuntimeError(
+            "Google Cloud Vision credentials are not configured. Set the GOOGLE_VISION_API_KEY "
+            "environment variable or provide service account credentials via "
+            "GOOGLE_APPLICATION_CREDENTIALS_JSON."
+        )
 
     try:
         return vision.ImageAnnotatorClient(client_options=client_options, credentials=credentials)
