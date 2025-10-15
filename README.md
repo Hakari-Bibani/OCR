@@ -22,16 +22,24 @@ pip install -r requirements.txt
 
 ## Configuration
 
-The application is preconfigured with a default Google Cloud Vision API key so that it works out of the box. If you would like
-to use a different key, set the following environment variable before running the application:
+Before running the application you must provide credentials for the Google Cloud Vision API. There are two supported options:
 
-- `GOOGLE_VISION_API_KEY` &mdash; your Google Cloud Vision API key.
+1. **API key** &mdash; set the following environment variable or add it to Streamlit's secrets file:
+   - `GOOGLE_VISION_API_KEY` &mdash; your Google Cloud Vision API key.
 
-You can export it in your shell session:
+   Example shell configuration:
 
-```bash
-export GOOGLE_VISION_API_KEY="your_api_key_here"
-```
+   ```bash
+   export GOOGLE_VISION_API_KEY="your_api_key_here"
+   ```
+
+   Or create `.streamlit/secrets.toml` next to `app.py` with:
+
+   ```toml
+   GOOGLE_VISION_API_KEY = "your_api_key_here"
+   ```
+
+2. **Service account** &mdash; supply the JSON credentials via the `GOOGLE_APPLICATION_CREDENTIALS_JSON` environment variable. This enables OAuth-based access instead of an API key.
 
 ## Running the application
 
@@ -45,4 +53,4 @@ Streamlit will print a local URL (e.g., `http://localhost:8501/`). Open it in a 
 
 - Google Cloud Vision OCR works well with Kurdish text without additional configuration.
 - Uploaded files are processed in-memory and stored temporarily only for OCR extraction.
-- For production deployments you should configure secure storage of secrets and evaluate Google Cloud costs.
+- For production deployments you should configure secure storage of secrets (for example Streamlit secrets or a secrets manager) and evaluate Google Cloud costs.
