@@ -12,23 +12,26 @@ from typing import List
 import requests
 import streamlit as st
 
+# ✅ Allowed file types
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "tiff", "pdf"}
 
+
+# 🧩 Get API key from environment or Streamlit secrets
 def _get_api_key() -> str | None:
     """Return the Gemini API key from env vars or Streamlit secrets."""
-
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
         return api_key
 
     try:
         secrets_key = st.secrets.get("GEMINI_API_KEY")
-    except Exception:  # pragma: no cover - defensive for local runs
+    except Exception:
         secrets_key = None
 
     return secrets_key
 
 
+# 🧠 Process document (image or PDF)
 def _process_document(path: Path) -> List[str]:
     ext = path.suffix.lower()
     if ext == ".pdf":
@@ -36,6 +39,7 @@ def _process_document(path: Path) -> List[str]:
     return _extract_image_text(path)
 
 
+# 🖼️ Extract text from images
 def _extract_image_text(path: Path) -> List[str]:
     with path.open("rb") as image_file:
         content = image_file.read()
@@ -47,6 +51,7 @@ def _extract_image_text(path: Path) -> List[str]:
     return [text] if text else []
 
 
+# 📄 Extract text from PDF by converting each page to an image
 def _extract_pdf_text(path: Path) -> List[str]:
     import fitz  # PyMuPDF
 
@@ -66,6 +71,7 @@ def _extract_pdf_text(path: Path) -> List[str]:
     return blocks
 
 
+# 💬 Send data to Gemini API and get extracted text
 def _extract_text_from_bytes(data: bytes, mime_type: str) -> str:
     api_key = _get_api_key()
     if not api_key:
@@ -74,15 +80,17 @@ def _extract_text_from_bytes(data: bytes, mime_type: str) -> str:
             "or add it to Streamlit secrets."
         )
 
-    endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    # ✅ UPDATED ENDPOINT (v1 instead of v1beta)
+    endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent"
+
     payload = {
         "contents": [
             {
                 "parts": [
                     {
                         "text": (
-                            "Extract the text from this document image. Return only the text and "
-                            "preserve line breaks when possible."
+                            "Extract the text from this Kurdish document image or page. "
+                            "Return only the text and preserve line breaks when possible."
                         )
                     },
                     {
@@ -102,9 +110,9 @@ def _extract_text_from_bytes(data: bytes, mime_type: str) -> str:
             params={"key": api_key},
             headers={"Content-Type": "application/json"},
             json=payload,
-            timeout=60,
+            timeout=90,
         )
-    except requests.RequestException as exc:  # pragma: no cover - network failure
+    except requests.RequestException as exc:
         raise RuntimeError("Failed to connect to the Gemini API.") from exc
 
     if response.status_code != 200:
@@ -132,6 +140,7 @@ def _extract_text_from_bytes(data: bytes, mime_type: str) -> str:
     return text
 
 
+# 🧰 Save uploaded file to a temporary file
 def _save_to_temp_file(data: bytes, filename: str | None) -> Path:
     suffix = Path(filename).suffix if filename else ""
     suffix = suffix if suffix else ".tmp"
@@ -144,13 +153,19 @@ def _save_to_temp_file(data: bytes, filename: str | None) -> Path:
     return Path(tmp_file.name)
 
 
+# 🖥️ Streamlit UI
 def main() -> None:
     st.set_page_config(page_title="Kurdish OCR", page_icon="📝", layout="centered")
-    st.title("Kurdish OCR")
+    st.title("Kurdish OCR 📝")
     st.write(
-        "Upload a Kurdish document as an image or PDF and extract the detected text using "
-        "Google Gemini."
+        "Upload a Kurdish document (image or PDF) and extract the detected text using Google Gemini."
     )
+
+    # ✅ Show key detection status
+    if _get_api_key():
+        st.success("✅ Gemini API key detected and ready to use.")
+    else:
+        st.error("❌ Gemini API key not found. Add it in Streamlit secrets.")
 
     with st.form("ocr_form"):
         uploaded_file = st.file_uploader(
@@ -175,7 +190,7 @@ def main() -> None:
     try:
         try:
             text_blocks = _process_document(tmp_path)
-        except Exception as exc:  # pragma: no cover - surfaced to the UI
+        except Exception as exc:
             st.error(f"Failed to process the document: {exc}")
             return
 
@@ -183,7 +198,7 @@ def main() -> None:
             st.info("No text detected in the document.")
             return
 
-        st.success("Text extracted successfully.")
+        st.success("✅ Text extracted successfully.")
         for index, block in enumerate(text_blocks, start=1):
             st.text_area(
                 label=f"Extracted text block {index}",
@@ -193,7 +208,7 @@ def main() -> None:
             )
 
         st.download_button(
-            label="Download original file",
+            label="⬇️ Download original file",
             data=file_data,
             file_name=uploaded_file.name or f"document{tmp_path.suffix}",
             mime=uploaded_file.type or "application/octet-stream",
