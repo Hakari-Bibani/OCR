@@ -1,104 +1,53 @@
-"""Streamlit app for extracting Kurdish text using Google Cloud Vision."""
+"""Streamlit app for extracting Kurdish text using Google Gemini."""
 
 from __future__ import annotations
 
-import json
+import base64
+import mimetypes
 import os
 import tempfile
 from pathlib import Path
 from typing import List
 
+import requests
 import streamlit as st
-from google.api_core.client_options import ClientOptions
-from google.auth.exceptions import GoogleAuthError
-from google.cloud import vision
-from google.oauth2 import service_account
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "tiff", "pdf"}
 
 def _get_api_key() -> str | None:
-    """Return the Google Vision API key from env vars or Streamlit secrets."""
+    """Return the Gemini API key from env vars or Streamlit secrets."""
 
-    api_key = os.environ.get("GOOGLE_VISION_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
         return api_key
 
     try:
-        secrets_key = st.secrets.get("GOOGLE_VISION_API_KEY")
+        secrets_key = st.secrets.get("GEMINI_API_KEY")
     except Exception:  # pragma: no cover - defensive for local runs
         secrets_key = None
 
     return secrets_key
 
 
-def _vision_client() -> vision.ImageAnnotatorClient:
-    api_key = _get_api_key()
-    client_options = ClientOptions(api_key=api_key) if api_key else None
-
-    credentials_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-    credentials = None
-
-    if credentials_json:
-        try:
-            credentials_info = json.loads(credentials_json)
-            credentials = service_account.Credentials.from_service_account_info(credentials_info)
-        except (ValueError, GoogleAuthError) as exc:
-            raise RuntimeError(
-                "Invalid Google Cloud service account credentials provided via "
-                "GOOGLE_APPLICATION_CREDENTIALS_JSON."
-            ) from exc
-    elif not api_key and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-        raise RuntimeError(
-            "Google Cloud Vision credentials are not configured. Set the GOOGLE_VISION_API_KEY "
-            "environment variable or provide service account credentials via "
-            "GOOGLE_APPLICATION_CREDENTIALS_JSON."
-        )
-
-    try:
-        return vision.ImageAnnotatorClient(client_options=client_options, credentials=credentials)
-    except GoogleAuthError as exc:  # pragma: no cover - surface to UI
-        raise RuntimeError(
-            "Google Cloud Vision credentials could not be determined. "
-            "Provide a valid service account JSON via GOOGLE_APPLICATION_CREDENTIALS_JSON "
-            "or configure default credentials."
-        ) from exc
-
-
 def _process_document(path: Path) -> List[str]:
     ext = path.suffix.lower()
-    client = _vision_client()
-
     if ext == ".pdf":
-        return _extract_pdf_text(client, path)
-    return _extract_image_text(client, path)
+        return _extract_pdf_text(path)
+    return _extract_image_text(path)
 
 
-def _extract_image_text(client: vision.ImageAnnotatorClient, path: Path) -> List[str]:
+def _extract_image_text(path: Path) -> List[str]:
     with path.open("rb") as image_file:
         content = image_file.read()
 
-    image = vision.Image(content=content)
-    try:
-        response = client.text_detection(image=image)
-    except GoogleAuthError as exc:  # pragma: no cover - surface to UI
-        raise RuntimeError(
-            "Failed to authenticate with Google Cloud Vision. "
-            "Check your credentials configuration."
-        ) from exc
+    mime_type, _ = mimetypes.guess_type(str(path))
+    mime_type = mime_type or "application/octet-stream"
 
-    if response.error.message:
-        raise RuntimeError(response.error.message)
-
-    annotations = response.text_annotations
-    if not annotations:
-        return []
-
-    # The first annotation contains the full text, subsequent entries are word-level.
-    full_text = annotations[0].description
-    return [full_text.strip()]
+    text = _extract_text_from_bytes(content, mime_type)
+    return [text] if text else []
 
 
-def _extract_pdf_text(client: vision.ImageAnnotatorClient, path: Path) -> List[str]:
+def _extract_pdf_text(path: Path) -> List[str]:
     import fitz  # PyMuPDF
 
     document = fitz.open(path)
@@ -107,25 +56,80 @@ def _extract_pdf_text(client: vision.ImageAnnotatorClient, path: Path) -> List[s
         for page_number in range(document.page_count):
             page = document.load_page(page_number)
             pix = page.get_pixmap(dpi=300)
-            image = vision.Image(content=pix.tobytes())
-            try:
-                response = client.text_detection(image=image)
-            except GoogleAuthError as exc:  # pragma: no cover - surface to UI
-                raise RuntimeError(
-                    "Failed to authenticate with Google Cloud Vision. "
-                    "Check your credentials configuration."
-                ) from exc
-
-            if response.error.message:
-                raise RuntimeError(response.error.message)
-
-            annotations = response.text_annotations
-            if annotations:
-                blocks.append(annotations[0].description.strip())
+            image_bytes = pix.tobytes("png")
+            text = _extract_text_from_bytes(image_bytes, "image/png")
+            if text:
+                blocks.append(text)
     finally:
         document.close()
 
     return blocks
+
+
+def _extract_text_from_bytes(data: bytes, mime_type: str) -> str:
+    api_key = _get_api_key()
+    if not api_key:
+        raise RuntimeError(
+            "Gemini API key is not configured. Set the GEMINI_API_KEY environment variable "
+            "or add it to Streamlit secrets."
+        )
+
+    endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": (
+                            "Extract the text from this document image. Return only the text and "
+                            "preserve line breaks when possible."
+                        )
+                    },
+                    {
+                        "inline_data": {
+                            "mime_type": mime_type,
+                            "data": base64.b64encode(data).decode("utf-8"),
+                        }
+                    },
+                ]
+            }
+        ]
+    }
+
+    try:
+        response = requests.post(
+            endpoint,
+            params={"key": api_key},
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
+    except requests.RequestException as exc:  # pragma: no cover - network failure
+        raise RuntimeError("Failed to connect to the Gemini API.") from exc
+
+    if response.status_code != 200:
+        message = response.text
+        try:
+            error_payload = response.json()
+        except ValueError:
+            error_payload = None
+        if error_payload and "error" in error_payload:
+            message = error_payload["error"].get("message", message)
+        raise RuntimeError(f"Gemini API error: {message}")
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise RuntimeError("Invalid response from the Gemini API.") from exc
+
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        return ""
+
+    parts = candidates[0].get("content", {}).get("parts", [])
+    texts = [part.get("text", "").strip() for part in parts if isinstance(part, dict)]
+    text = "\n".join(filter(None, texts)).strip()
+    return text
 
 
 def _save_to_temp_file(data: bytes, filename: str | None) -> Path:
@@ -145,7 +149,7 @@ def main() -> None:
     st.title("Kurdish OCR")
     st.write(
         "Upload a Kurdish document as an image or PDF and extract the detected text using "
-        "Google Cloud Vision."
+        "Google Gemini."
     )
 
     with st.form("ocr_form"):
