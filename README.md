@@ -22,7 +22,8 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Before running the application you must provide credentials for the Google Cloud Vision API. There are two supported options:
+Before running the application you must provide credentials for the Google Cloud Vision API. The app will fail fast with a
+helpful error if neither option below is configured:
 
 1. **API key** &mdash; set the following environment variable or add it to Streamlit's secrets file:
    - `GOOGLE_VISION_API_KEY` &mdash; your Google Cloud Vision API key.
