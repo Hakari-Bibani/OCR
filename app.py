@@ -16,11 +16,23 @@ from google.oauth2 import service_account
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "tiff", "pdf"}
 
-DEFAULT_GOOGLE_VISION_API_KEY = "AIzaSyBfVegccgGGEetfHMcpm4t5j_3b7OQclSQ"
+def _get_api_key() -> str | None:
+    """Return the Google Vision API key from env vars or Streamlit secrets."""
+
+    api_key = os.environ.get("GOOGLE_VISION_API_KEY")
+    if api_key:
+        return api_key
+
+    try:
+        secrets_key = st.secrets.get("GOOGLE_VISION_API_KEY")
+    except Exception:  # pragma: no cover - defensive for local runs
+        secrets_key = None
+
+    return secrets_key
 
 
 def _vision_client() -> vision.ImageAnnotatorClient:
-    api_key = os.environ.get("GOOGLE_VISION_API_KEY") or DEFAULT_GOOGLE_VISION_API_KEY
+    api_key = _get_api_key()
     client_options = ClientOptions(api_key=api_key) if api_key else None
 
     credentials_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
